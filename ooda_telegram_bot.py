@@ -1,18 +1,11 @@
 """
-OODA AI Office — Telegram Bot (Google Gemini)
-===============================================
-O'rnatish:
-  pip install python-telegram-bot google-generativeai
-
-Railway Variables:
-  TELEGRAM_TOKEN  — @BotFather dan
-  GEMINI_KEY      — aistudio.google.com dan
+OODA AI Office — Telegram Bot (Groq - tez!)
 """
 
 import os
 import asyncio
 import logging
-import google.generativeai as genai
+from groq import Groq
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
@@ -22,58 +15,46 @@ from telegram.ext import (
 logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-GEMINI_KEY     = os.getenv("GEMINI_KEY", "")
+GROQ_KEY       = os.getenv("GROQ_KEY", "")
 
-genai.configure(api_key=GEMINI_KEY)
+groq_client = Groq(api_key=GROQ_KEY)
 
 AGENTS = {
     "rex": {
         "emoji": "🧠", "name": "Rex", "role": "Kuzat",
-        "sys": (
-            "Sen Rex — OODA tsiklining 'Kuzat' bosqichi strategisti. "
-            "O'zbek tilida 2-3 gap, manga uslubida, energik javob ber. "
-            "Muammoning asosiy jihatlarini kuzat."
-        ),
+        "sys": "Sen Rex — OODA tsiklining 'Kuzat' bosqichi strategisti. O'zbek tilida 2-3 gap, manga uslubida, energik javob ber. Muammoning asosiy jihatlarini kuzat.",
     },
     "nova": {
         "emoji": "🔬", "name": "Nova", "role": "Tahlil",
-        "sys": (
-            "Sen Nova — OODA tsiklining 'Tahlil' bosqichi mutaxassisi. "
-            "O'zbek tilida 2-3 gap, mantiqiy, manga uslubida tahlil qil."
-        ),
+        "sys": "Sen Nova — OODA tsiklining 'Tahlil' bosqichi mutaxassisi. O'zbek tilida 2-3 gap, mantiqiy, manga uslubida tahlil qil.",
     },
     "axel": {
         "emoji": "⚙️", "name": "Axel", "role": "Qaror",
-        "sys": (
-            "Sen Axel — OODA tsiklining 'Qaror' bosqichi ijrochisi. "
-            "O'zbek tilida 2-3 gap, qat'iy, manga uslubida. "
-            "Konkret harakat rejasi ber."
-        ),
+        "sys": "Sen Axel — OODA tsiklining 'Qaror' bosqichi ijrochisi. O'zbek tilida 2-3 gap, qat'iy, manga uslubida. Konkret harakat rejasi ber.",
     },
     "lyra": {
         "emoji": "🎯", "name": "Lyra", "role": "Xulosa",
-        "sys": (
-            "Sen Lyra — OODA tsiklining 'Harakat' bosqichi xulosachisi. "
-            "O'zbek tilida 2-3 gap, ilhomlantiruvchi, manga uslubida. "
-            "Barcha agentlar fikrlarini birlashtirib eng zo'r yakuniy yechim taklif qil."
-        ),
+        "sys": "Sen Lyra — OODA tsiklining 'Harakat' bosqichi xulosachisi. O'zbek tilida 2-3 gap, ilhomlantiruvchi, manga uslubida. Barcha agentlar fikrlarini birlashtirib eng zo'r yakuniy yechim taklif qil.",
     },
 }
 
 
 def ask_agent(agent_id: str, question: str) -> str:
     a = AGENTS[agent_id]
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=a["sys"]
+    resp = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": a["sys"]},
+            {"role": "user", "content": question},
+        ],
+        max_tokens=300,
     )
-    resp = model.generate_content(question)
-    return resp.text
+    return resp.choices[0].message.content
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🏢 *OODA AI Office — Manga Super AI*\n\n"
+        "🏢 *OODA AI Office — Manga Super AI* ⚡\n\n"
         "4 ta AI agentdan iborat komandasiman:\n"
         "🧠 *Rex* — Kuzatuvchi\n"
         "🔬 *Nova* — Tahlilchi\n"
@@ -138,7 +119,7 @@ def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🚀 OODA AI Office bot ishga tushdi!")
+    print("🚀 OODA AI Office bot ishga tushdi! (Groq turbo)")
     app.run_polling()
 
 
