@@ -1,1 +1,2 @@
-worker: python ooda_telegram_bot.py
+python-telegram-bot==21.3
+google-generativeai==0.8.3
