@@ -1,20 +1,18 @@
 """
-OODA AI Office — Telegram Bot
-================================
-Deploy qilish uchun:
-  1. pip install python-telegram-bot anthropic
-  2. .env faylga tokenlarni qo'ying
-  3. python ooda_telegram_bot.py
+OODA AI Office — Telegram Bot (Google Gemini)
+===============================================
+O'rnatish:
+  pip install python-telegram-bot google-generativeai
 
-Kerakli o'zgaruvchilar:
-  TELEGRAM_TOKEN  — BotFather dan olingan token
-  ANTHROPIC_KEY   — console.anthropic.com dan API key
+Railway Variables:
+  TELEGRAM_TOKEN  — @BotFather dan
+  GEMINI_KEY      — aistudio.google.com dan
 """
 
 import os
 import asyncio
 import logging
-from anthropic import Anthropic
+import google.generativeai as genai
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler,
@@ -23,38 +21,38 @@ from telegram.ext import (
 
 logging.basicConfig(level=logging.INFO)
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "YOUR_TELEGRAM_TOKEN")
-ANTHROPIC_KEY  = os.getenv("ANTHROPIC_KEY",  "YOUR_ANTHROPIC_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+GEMINI_KEY     = os.getenv("GEMINI_KEY", "")
 
-client = Anthropic(api_key=ANTHROPIC_KEY)
+genai.configure(api_key=GEMINI_KEY)
 
 AGENTS = {
-    "rex":  {
-        "emoji": "🧠", "name": "Rex",  "role": "Kuzat (Observe)",
-        "sys":   (
+    "rex": {
+        "emoji": "🧠", "name": "Rex", "role": "Kuzat",
+        "sys": (
             "Sen Rex — OODA tsiklining 'Kuzat' bosqichi strategisti. "
             "O'zbek tilida 2-3 gap, manga uslubida, energik javob ber. "
             "Muammoning asosiy jihatlarini kuzat."
         ),
     },
     "nova": {
-        "emoji": "🔬", "name": "Nova", "role": "Tahlil (Orient)",
-        "sys":   (
+        "emoji": "🔬", "name": "Nova", "role": "Tahlil",
+        "sys": (
             "Sen Nova — OODA tsiklining 'Tahlil' bosqichi mutaxassisi. "
             "O'zbek tilida 2-3 gap, mantiqiy, manga uslubida tahlil qil."
         ),
     },
     "axel": {
-        "emoji": "⚙️", "name": "Axel", "role": "Qaror (Decide)",
-        "sys":   (
+        "emoji": "⚙️", "name": "Axel", "role": "Qaror",
+        "sys": (
             "Sen Axel — OODA tsiklining 'Qaror' bosqichi ijrochisi. "
             "O'zbek tilida 2-3 gap, qat'iy, manga uslubida. "
             "Konkret harakat rejasi ber."
         ),
     },
     "lyra": {
-        "emoji": "🎯", "name": "Lyra", "role": "Xulosa (Act)",
-        "sys":   (
+        "emoji": "🎯", "name": "Lyra", "role": "Xulosa",
+        "sys": (
             "Sen Lyra — OODA tsiklining 'Harakat' bosqichi xulosachisi. "
             "O'zbek tilida 2-3 gap, ilhomlantiruvchi, manga uslubida. "
             "Barcha agentlar fikrlarini birlashtirib eng zo'r yakuniy yechim taklif qil."
@@ -64,26 +62,24 @@ AGENTS = {
 
 
 def ask_agent(agent_id: str, question: str) -> str:
-    """Bitta agentga sinxron so'rov yuboradi."""
     a = AGENTS[agent_id]
-    resp = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=600,
-        system=a["sys"],
-        messages=[{"role": "user", "content": question}],
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction=a["sys"]
     )
-    return resp.content[0].text
+    resp = model.generate_content(question)
+    return resp.text
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🏢 *OODA AI Office — Manga Super AI*\n\n"
-        "Men 4 ta AI agentdan iborat komandasiman:\n"
+        "4 ta AI agentdan iborat komandasiman:\n"
         "🧠 *Rex* — Kuzatuvchi\n"
         "🔬 *Nova* — Tahlilchi\n"
         "⚙️ *Axel* — Qaror qabul qiluvchi\n"
         "🎯 *Lyra* — Xulosa chiqaruvchi\n\n"
-        "Savol yoki taklifingizni yuboring, komanda maslahat qilib yechim topadi!",
+        "Savol yoki taklifingizni yuboring!",
         parse_mode="Markdown",
     )
 
@@ -93,7 +89,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not question:
         return
 
-    # Foydalanuvchiga jarayon boshlanganligi haqida xabar
     status_msg = await update.message.reply_text(
         "⚡ OODA jarayoni boshlandi...\n"
         "🔍 Rex, Nova, Axel parallel tahlil qilmoqda..."
@@ -101,12 +96,11 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     loop = asyncio.get_event_loop()
 
-    # 1-3 bosqich: Rex, Nova, Axel — parallel
-    rex_fut  = loop.run_in_executor(None, ask_agent, "rex",  question)
-    nova_fut = loop.run_in_executor(None, ask_agent, "nova", question)
-    axel_fut = loop.run_in_executor(None, ask_agent, "axel", question)
-
-    rex_r, nova_r, axel_r = await asyncio.gather(rex_fut, nova_fut, axel_fut)
+    rex_r, nova_r, axel_r = await asyncio.gather(
+        loop.run_in_executor(None, ask_agent, "rex",  question),
+        loop.run_in_executor(None, ask_agent, "nova", question),
+        loop.run_in_executor(None, ask_agent, "axel", question),
+    )
 
     await ctx.bot.edit_message_text(
         chat_id=update.effective_chat.id,
@@ -114,22 +108,18 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         text="🎯 Lyra yakuniy xulosani tayyorlamoqda...",
     )
 
-    # 4-bosqich: Lyra — barcha natijalarni birlashtiradi
-    lyra_context = (
-        f"Savol: {question}\n\n"
-        f"Rex: {rex_r}\n\nNova: {nova_r}\n\nAxel: {axel_r}"
+    lyra_r = await loop.run_in_executor(
+        None, ask_agent, "lyra",
+        f"Savol: {question}\n\nRex: {rex_r}\n\nNova: {nova_r}\n\nAxel: {axel_r}"
     )
-    lyra_r = await loop.run_in_executor(None, ask_agent, "lyra", lyra_context)
 
-    # Eski status xabarni o'chir
     await ctx.bot.delete_message(
         chat_id=update.effective_chat.id,
         message_id=status_msg.message_id,
     )
 
-    # Natijalarni guruhlarga yubor
     result = (
-        f"*📬 Savol:* {question}\n\n"
+        f"📬 *Savol:* {question}\n\n"
         f"━━━━━━━━━━━━━━━\n"
         f"🧠 *Rex* _(Kuzat)_\n{rex_r}\n\n"
         f"🔬 *Nova* _(Tahlil)_\n{nova_r}\n\n"
@@ -138,7 +128,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"🎯 *Lyra — Yakuniy Xulosa*\n{lyra_r}"
     )
 
-    # Telegram 4096 belgidan uzun xabarni qabul qilmaydi
     if len(result) > 4000:
         result = result[:3997] + "..."
 
