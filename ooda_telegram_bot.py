@@ -1,5 +1,5 @@
 """
-OODA AI Office — Telegram Bot (Groq - tez!)
+OODA AI Office — Telegram Bot (Groq - optimallashtirilgan)
 """
 
 import os
@@ -20,47 +20,33 @@ GROQ_KEY       = os.getenv("GROQ_KEY", "")
 groq_client = Groq(api_key=GROQ_KEY)
 
 AGENTS = {
-    "rex": {
-        "emoji": "🧠", "name": "Rex", "role": "Kuzat",
-        "sys": "Sen Rex — OODA tsiklining 'Kuzat' bosqichi strategisti. O'zbek tilida 2-3 gap, manga uslubida, energik javob ber. Muammoning asosiy jihatlarini kuzat.",
-    },
-    "nova": {
-        "emoji": "🔬", "name": "Nova", "role": "Tahlil",
-        "sys": "Sen Nova — OODA tsiklining 'Tahlil' bosqichi mutaxassisi. O'zbek tilida 2-3 gap, mantiqiy, manga uslubida tahlil qil.",
-    },
-    "axel": {
-        "emoji": "⚙️", "name": "Axel", "role": "Qaror",
-        "sys": "Sen Axel — OODA tsiklining 'Qaror' bosqichi ijrochisi. O'zbek tilida 2-3 gap, qat'iy, manga uslubida. Konkret harakat rejasi ber.",
-    },
-    "lyra": {
-        "emoji": "🎯", "name": "Lyra", "role": "Xulosa",
-        "sys": "Sen Lyra — OODA tsiklining 'Harakat' bosqichi xulosachisi. O'zbek tilida 2-3 gap, ilhomlantiruvchi, manga uslubida. Barcha agentlar fikrlarini birlashtirib eng zo'r yakuniy yechim taklif qil.",
-    },
+    "rex":  { "name": "Rex",  "emoji": "🧠", "role": "Kuzat",
+              "sys": "Sen Rex. OODA 'Kuzat' bosqichi. O'zbek tilida FAQAT 2 gap yoz. Qisqa, aniq, manga uslubida. Boshqa hech narsa yozma." },
+    "nova": { "name": "Nova", "emoji": "🔬", "role": "Tahlil",
+              "sys": "Sen Nova. OODA 'Tahlil' bosqichi. O'zbek tilida FAQAT 2 gap yoz. Mantiqiy, qisqa. Boshqa hech narsa yozma." },
+    "axel": { "name": "Axel", "emoji": "⚙️", "role": "Qaror",
+              "sys": "Sen Axel. OODA 'Qaror' bosqichi. O'zbek tilida FAQAT 2 gap yoz. Konkret harakat taklif qil. Boshqa hech narsa yozma." },
+    "lyra": { "name": "Lyra", "emoji": "🎯", "role": "Xulosa",
+              "sys": "Sen Lyra. OODA yakuniy xulosa. O'zbek tilida FAQAT 3 gap yoz. Barcha fikrlarni birlashtirib eng yaxshi yechim ber. Boshqa hech narsa yozma." },
 }
 
 
-def ask_agent(agent_id: str, question: str) -> str:
+def ask_agent(agent_id: str, messages: list) -> str:
     a = AGENTS[agent_id]
     resp = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
-        messages=[
-            {"role": "system", "content": a["sys"]},
-            {"role": "user", "content": question},
-        ],
-        max_tokens=300,
+        messages=[{"role": "system", "content": a["sys"]}] + messages,
+        max_tokens=150,
+        temperature=0.7,
     )
-    return resp.choices[0].message.content
+    return resp.choices[0].message.content.strip()
 
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🏢 *OODA AI Office — Manga Super AI* ⚡\n\n"
-        "4 ta AI agentdan iborat komandasiman:\n"
-        "🧠 *Rex* — Kuzatuvchi\n"
-        "🔬 *Nova* — Tahlilchi\n"
-        "⚙️ *Axel* — Qaror qabul qiluvchi\n"
-        "🎯 *Lyra* — Xulosa chiqaruvchi\n\n"
-        "Savol yoki taklifingizni yuboring!",
+        "🏢 *OODA AI Office* ⚡\n\n"
+        "🧠 Rex · 🔬 Nova · ⚙️ Axel · 🎯 Lyra\n\n"
+        "Savol yuboring — 4 agent 3 sekundda javob beradi!",
         parse_mode="Markdown",
     )
 
@@ -70,29 +56,22 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not question:
         return
 
-    status_msg = await update.message.reply_text(
-        "⚡ OODA jarayoni boshlandi...\n"
-        "🔍 Rex, Nova, Axel parallel tahlil qilmoqda..."
-    )
+    status_msg = await update.message.reply_text("⚡ Tahlil qilinmoqda...")
 
     loop = asyncio.get_event_loop()
+    user_msg = [{"role": "user", "content": question}]
 
+    # Parallel: Rex, Nova, Axel
     rex_r, nova_r, axel_r = await asyncio.gather(
-        loop.run_in_executor(None, ask_agent, "rex",  question),
-        loop.run_in_executor(None, ask_agent, "nova", question),
-        loop.run_in_executor(None, ask_agent, "axel", question),
+        loop.run_in_executor(None, ask_agent, "rex",  user_msg),
+        loop.run_in_executor(None, ask_agent, "nova", user_msg),
+        loop.run_in_executor(None, ask_agent, "axel", user_msg),
     )
 
-    await ctx.bot.edit_message_text(
-        chat_id=update.effective_chat.id,
-        message_id=status_msg.message_id,
-        text="🎯 Lyra yakuniy xulosani tayyorlamoqda...",
-    )
-
-    lyra_r = await loop.run_in_executor(
-        None, ask_agent, "lyra",
-        f"Savol: {question}\n\nRex: {rex_r}\n\nNova: {nova_r}\n\nAxel: {axel_r}"
-    )
+    # Lyra — qisqa xulosa
+    lyra_msg = [{"role": "user", "content":
+        f"Savol: {question}\nRex: {rex_r}\nNova: {nova_r}\nAxel: {axel_r}\n\nYakuniy xulosa:"}]
+    lyra_r = await loop.run_in_executor(None, ask_agent, "lyra", lyra_msg)
 
     await ctx.bot.delete_message(
         chat_id=update.effective_chat.id,
@@ -100,13 +79,13 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
     result = (
-        f"📬 *Savol:* {question}\n\n"
+        f"❓ *{question}*\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"🧠 *Rex* _(Kuzat)_\n{rex_r}\n\n"
-        f"🔬 *Nova* _(Tahlil)_\n{nova_r}\n\n"
-        f"⚙️ *Axel* _(Qaror)_\n{axel_r}\n\n"
+        f"🧠 *Rex:* {rex_r}\n\n"
+        f"🔬 *Nova:* {nova_r}\n\n"
+        f"⚙️ *Axel:* {axel_r}\n\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"🎯 *Lyra — Yakuniy Xulosa*\n{lyra_r}"
+        f"🎯 *Lyra:* {lyra_r}"
     )
 
     if len(result) > 4000:
@@ -119,7 +98,7 @@ def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🚀 OODA AI Office bot ishga tushdi! (Groq turbo)")
+    print("🚀 OODA AI Office — Groq Turbo!")
     app.run_polling()
 
 
